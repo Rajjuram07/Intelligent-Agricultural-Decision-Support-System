@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual Environments
+venv/
+krishimitra_env/
+
+# Streamlit
+.streamlit/
+
+# VS Code
+.vscode/
+
+# Environment Variables
+.env
+
+# Vector Databases
+*.faiss
+*.pkl
+*.npy
+
+# OS
+.DS_Store
+Thumbs.db
