@@ -8,10 +8,18 @@ import faiss
 
 import numpy as np
 
+from pinecone import Pinecone
+
 from rag_workspace.config import (
     FAISS_INDEX_PATH
 )
 
+from utils.config import (
+
+    PINECONE_API_KEY,
+
+    PINECONE_INDEX_NAME
+)
 
 # =========================================================
 # CREATE FAISS INDEX
@@ -102,3 +110,61 @@ def search_documents(
     )
 
     return distances[0], indices[0]
+
+# =========================================================
+# INITIALIZE PINECONE
+# =========================================================
+def initialize_pinecone():
+
+    try:
+
+        pc = Pinecone(
+            api_key=PINECONE_API_KEY
+        )
+
+        index = pc.Index(
+            PINECONE_INDEX_NAME
+        )
+
+        return index
+
+    except Exception as e:
+
+        print(
+            f"Pinecone initialization error: {e}"
+        )
+
+        return None
+
+# =========================================================
+# PINECONE SEARCH
+# =========================================================
+def pinecone_search(
+
+    pinecone_index,
+
+    query_embedding,
+
+    top_k=5
+):
+
+    try:
+
+        results = pinecone_index.query(
+
+            vector=query_embedding.tolist(),
+
+            top_k=top_k,
+
+            include_metadata=True
+        )
+
+        return results.matches
+
+    except Exception as e:
+
+        print(
+            f"Pinecone search error: {e}"
+        )
+
+        return []

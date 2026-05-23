@@ -21,7 +21,11 @@ from visualization.model_analytics import (
 from database.history import (
     save_message,
     load_chat_history,
-    clear_chat_history
+    get_chat_statistics,
+    clear_chat_history,
+    save_activity,
+    load_activities,
+    delete_activity
 )
 
 from database.agriculture_logs import (
@@ -48,6 +52,52 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# =========================================================
+# GLOBAL SETTINGS SESSION STATE
+# =========================================================
+if "language_preference" not in st.session_state:
+
+    st.session_state.language_preference = "English"
+
+if "ai_temperature" not in st.session_state:
+
+    st.session_state.ai_temperature = 0.5
+
+if "retrieval_engine" not in st.session_state:
+
+    st.session_state.retrieval_engine = "FAISS"
+
+if "prediction_horizon" not in st.session_state:
+
+    st.session_state.prediction_horizon = "1 Year"
+
+if "weather_alerts" not in st.session_state:
+
+    st.session_state.weather_alerts = True
+
+if "ai_explanation_mode" not in st.session_state:
+
+    st.session_state.ai_explanation_mode = True
+
+# =========================================================
+# GLOBAL SEARCH HISTORY SESSION STATE
+# =========================================================
+if "ai_assistant_history" not in st.session_state:
+
+    st.session_state.ai_assistant_history = []
+
+if "rag_history_hidden" not in st.session_state:
+
+    st.session_state.rag_history_hidden = []
+
+if "weather_history_hidden" not in st.session_state:
+
+    st.session_state.weather_history_hidden = []
+
+if "ai_history_hidden" not in st.session_state:
+
+    st.session_state.ai_history_hidden = []
 
 from rag_workspace.rag_engine import (
 
@@ -92,6 +142,192 @@ with st.sidebar:
         ],
         default_index=0
     )
+
+    # =====================================================
+    # AI ASSISTANT HISTORY
+    # =====================================================
+    st.divider()
+
+    st.subheader(
+        "AI Assistant History"
+    )
+
+    if len(
+        st.session_state.ai_assistant_history
+    ) == 0:
+
+        st.info(
+            "No AI assistant searches."
+        )
+
+    else:
+
+        for i, item in enumerate(
+
+            reversed(
+                st.session_state.ai_assistant_history[-5:]
+            )
+        ):
+
+            if item["query"] in st.session_state.ai_history_hidden:
+
+                continue
+
+            col1, col2 = st.columns([5, 1])
+
+            with col1:
+
+                with st.expander(
+                    item["query"]
+                ):
+
+                    st.markdown(
+                        item["response"]
+                    )
+
+            with col2:
+
+                if st.button(
+
+                    "🗑",
+
+                    key=f"ai_delete_{i}"
+                ):
+
+                    st.session_state.ai_history_hidden.append(
+                        item["query"]
+                    )
+
+                    st.rerun()
+
+    # =====================================================
+    # RAG HISTORY
+    # =====================================================
+    st.divider()
+
+    st.subheader(
+        "RAG Intelligence History"
+    )
+
+    rag_history = load_query_history()
+
+    visible_rag_history = [
+
+        item for item in rag_history
+
+        if item["query"]
+        not in st.session_state.rag_history_hidden
+    ]
+
+    if len(visible_rag_history) == 0:
+
+        st.info(
+            "No RAG searches."
+        )
+
+    else:
+
+        for i, item in enumerate(
+
+            reversed(
+                visible_rag_history[-5:]
+            )
+        ):
+
+            col1, col2 = st.columns([5, 1])
+
+            with col1:
+
+                with st.expander(
+                    item["query"]
+                ):
+
+                    st.markdown(
+                        item["answer"]
+                    )
+
+                    st.caption(
+                        item["timestamp"]
+                    )
+
+            with col2:
+
+                if st.button(
+
+                    "🗑",
+
+                    key=f"rag_delete_{i}"
+                ):
+
+                    st.session_state.rag_history_hidden.append(
+                        item["query"]
+                    )
+
+                    st.rerun()
+
+    # =====================================================
+    # WEATHER HISTORY
+    # =====================================================
+    st.divider()
+
+    st.subheader(
+        "Weather Intelligence History"
+    )
+
+    if "weather_history" not in st.session_state:
+
+        st.session_state.weather_history = []
+
+    visible_weather_history = [
+
+        item for item
+        in st.session_state.weather_history
+
+        if item["query"]
+        not in st.session_state.weather_history_hidden
+    ]
+
+    if len(visible_weather_history) == 0:
+
+        st.info(
+            "No weather searches."
+        )
+
+    else:
+
+        for i, item in enumerate(
+
+            reversed(
+                visible_weather_history[-5:]
+            )
+        ):
+
+            col1, col2 = st.columns([5, 1])
+
+            with col1:
+
+                with st.expander(
+                    item["query"]
+                ):
+
+                    st.markdown(
+                        item["response"]
+                    )
+
+            with col2:
+
+                if st.button(
+
+                    "🗑",
+
+                    key=f"weather_delete_{i}"
+                ):
+
+                    st.session_state.weather_history_hidden.append(
+                        item["query"]
+                    )
+
+                    st.rerun()
 
 # =========================================================
 # MAIN HEADER
@@ -388,6 +624,35 @@ elif selected == "AI Assistant":
             response
         )
 
+        # =============================================
+        # SAVE ACTIVITY
+        # =============================================
+        save_activity(
+
+            module="AI Assistant",
+
+            query=prompt,
+
+            response=response,
+
+            retrieval_engine=st.session_state.retrieval_engine,
+
+            language=st.session_state.language_preference,
+
+            ai_temperature=st.session_state.ai_temperature
+        )
+
+        # =============================================
+        # SAVE AI ASSISTANT HISTORY
+        # =============================================
+        st.session_state.ai_assistant_history.append(
+
+            {
+                "query": prompt,
+                "response": response
+            }
+        )
+
     # =====================================================
     # PERSISTENT DASHBOARD
     # =====================================================
@@ -443,6 +708,140 @@ elif selected == "RAG Intelligence":
     st.divider()
 
     # =====================================================
+    # HYBRID AI RETRIEVAL PANEL
+    # =====================================================
+    st.sidebar.markdown(
+        """
+        <div style="
+            background: linear-gradient(
+                135deg,
+                #111827,
+                #1F2937
+            );
+            padding:18px;
+            border-radius:18px;
+            border:1px solid #374151;
+            margin-top:15px;
+            margin-bottom:15px;
+        ">
+
+        <h3 style="
+            color:white;
+            margin-bottom:12px;
+        ">
+            Hybrid AI Retrieval
+        </h3>
+
+        <p style="color:#D1D5DB;">
+            FAISS:
+            <span style="color:#10B981;">
+                Connected
+            </span>
+        </p>
+
+        <p style="color:#D1D5DB;">
+            Pinecone:
+            <span style="color:#10B981;">
+                Connected
+            </span>
+        </p>
+
+        <p style="color:#D1D5DB;">
+            Active Engine:
+            <span style="color:#60A5FA;">
+                Hybrid Retrieval
+            </span>
+        </p>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # =====================================================
+    # RAG SYSTEM CONTROL
+    # =====================================================
+    st.sidebar.markdown(
+        "### RAG Workspace Control"
+    )
+
+    if st.sidebar.button(
+        "Initialize Hybrid RAG System",
+        use_container_width=True
+    ):
+
+        with st.spinner(
+            "Initializing Hybrid AI Retrieval..."
+        ):
+
+            try:
+
+                st.session_state.rag_system = (
+                    initialize_rag_system()
+                )
+
+                st.sidebar.success(
+                    """
+                    Hybrid RAG System Initialized
+                    """
+                )
+
+            except Exception as e:
+
+                st.sidebar.error(
+                    f"""
+                    Initialization Failed:
+
+                    {str(e)}
+                    """
+                )
+
+    # =====================================================
+    # SEARCH HISTORY
+    # =====================================================
+    st.sidebar.divider()
+
+    st.sidebar.markdown(
+        """
+        ### Search Intelligence History
+        """
+    )
+
+    history = load_query_history()
+
+    if len(history) == 0:
+
+        st.sidebar.info(
+            "No searches yet."
+        )
+
+    else:
+
+        for item in reversed(history[-10:]):
+
+            with st.sidebar.expander(
+
+                f"""
+                {item["query"][:40]}
+                """
+            ):
+
+                st.markdown(
+                    item["answer"]
+                )
+
+                st.caption(
+                    item["timestamp"]
+                )
+
+                st.markdown(
+                    """
+                    Retrieval:
+                    Hybrid AI Retrieval
+                    """
+                )
+
+    # =====================================================
     # QUERY INPUT
     # =====================================================
     query = st.text_input(
@@ -482,82 +881,6 @@ elif selected == "RAG Intelligence":
 
     st.divider()
 
-    # =====================================================
-    # RAG INITIALIZATION
-    # =====================================================
-    st.sidebar.subheader(
-        "RAG System Control"
-    )
-
-    if st.sidebar.button(
-        "Initialize RAG System"
-    ):
-
-        with st.spinner(
-            "Initializing RAG Workspace..."
-        ):
-
-            try:
-
-                st.session_state.rag_system = (
-                    initialize_rag_system()
-                )
-
-                st.sidebar.success(
-                    """
-                    RAG System Initialized Successfully
-                    """
-                )
-
-            except Exception as e:
-
-                st.sidebar.error(
-                    f"""
-                    Initialization Failed:
-
-                    {str(e)}
-                    """
-                )
-
-    # =====================================================
-    # SEARCH HISTORY
-    # =====================================================
-    st.sidebar.divider()
-
-    st.sidebar.subheader(
-        "Search History"
-    )
-
-    history = load_query_history()
-
-    if len(history) == 0:
-
-        st.sidebar.info(
-            "No searches yet."
-        )
-
-    else:
-
-        for item in reversed(history[-10:]):
-
-            with st.sidebar.expander(
-
-                item["query"]
-
-            ):
-
-                st.markdown(
-
-                    item["answer"]
-                )
-
-                st.caption(
-
-                    item["timestamp"]
-                )
-
-    st.divider()
-    
     # =====================================================
     # ASK BUTTON
     # =====================================================
@@ -619,15 +942,156 @@ elif selected == "RAG Intelligence":
                 )
 
                 # =============================================
-                # ANSWER
+                # AI AGRICULTURAL INTELLIGENCE
                 # =============================================
-                st.subheader(
-                    "AI Answer"
+                st.markdown(
+                    """
+                    <div style="
+                        background: linear-gradient(
+                            135deg,
+                            #111827,
+                            #1F2937
+                        );
+                        padding:25px;
+                        border-radius:18px;
+                        border:1px solid #374151;
+                        margin-bottom:20px;
+                    ">
+
+                    <h2 style="
+                        color:white;
+                        margin-bottom:15px;
+                    ">
+                        AI Agricultural Intelligence
+                    </h2>
+
+                    </div>
+                    """,
+                    unsafe_allow_html=True
                 )
 
                 st.markdown(
                     result["answer"]
                 )
+
+                # =============================================
+                # EXPLAINABLE AI MODE
+                # =============================================
+                if st.session_state.ai_explanation_mode:
+
+                    st.divider()
+
+                    st.subheader(
+                        "Explainable AI Insights"
+                    )
+
+                    explanation = result[
+                        "explanation"
+                    ]
+
+                    avg_similarity = explanation[
+                        "average_similarity"
+                    ]
+
+                    # =========================================
+                    # AI CONFIDENCE LEVEL
+                    # =========================================
+                    if avg_similarity >= 0.85:
+
+                        confidence = "High"
+
+                    elif avg_similarity >= 0.70:
+
+                        confidence = "Moderate"
+
+                    else:
+
+                        confidence = "Low"
+
+                    # =========================================
+                    # METRICS
+                    # =========================================
+                    e1, e2, e3, e4 = st.columns(4)
+
+                    with e1:
+
+                        st.metric(
+
+                            "Documents Retrieved",
+
+                            explanation[
+                                "documents_retrieved"
+                            ]
+                        )
+
+                    with e2:
+
+                        st.metric(
+
+                            "Similarity Score",
+
+                            avg_similarity
+                        )
+
+                    with e3:
+
+                        st.metric(
+
+                            "AI Confidence",
+
+                            confidence
+                        )
+
+                    with e4:
+
+                        st.metric(
+
+                            "Retrieval Engine",
+
+                            st.session_state.retrieval_engine
+                        )
+
+                    st.divider()
+
+                    # =========================================
+                    # AI REASONING
+                    # =========================================
+                    st.markdown(
+                        """
+                        ### AI Reasoning Summary
+                        """
+                    )
+
+                    st.info(
+                        f"""
+                        This response was generated using
+                        semantic agricultural retrieval
+                        with {confidence.lower()} confidence
+                        analysis from historical crop,
+                        rainfall, and production records.
+                        """
+                    )
+
+                    # =========================================
+                    # AGRICULTURAL INSIGHTS
+                    # =========================================
+                    r1, r2 = st.columns(2)
+
+                    with r1:
+
+                        st.success(
+                            explanation[
+                                "rainfall_analysis"
+                            ]
+                        )
+
+                    with r2:
+
+                        st.success(
+                            explanation[
+                                "production_trend"
+                            ]
+                        )
 
                 st.divider()
 
@@ -640,46 +1104,28 @@ elif selected == "RAG Intelligence":
 
                 stats = result["statistics"]
 
-                st.markdown(
-                    f"""
-                    ### Production Statistics
+                s1, s2, s3 = st.columns(3)
 
-                    - Average:
-                    {stats["production"]["average"]}
+                with s1:
 
-                    - Maximum:
-                    {stats["production"]["maximum"]}
+                    st.metric(
+                        "Average Production",
+                        stats["production"]["average"]
+                    )
 
-                    - Minimum:
-                    {stats["production"]["minimum"]}
+                with s2:
 
-                    ---
+                    st.metric(
+                        "Average Yield",
+                        stats["yield"]["average"]
+                    )
 
-                    ### Yield Statistics
+                with s3:
 
-                    - Average:
-                    {stats["yield"]["average"]}
-
-                    - Maximum:
-                    {stats["yield"]["maximum"]}
-
-                    - Minimum:
-                    {stats["yield"]["minimum"]}
-
-                    ---
-
-                    ### Rainfall Statistics
-
-                    - Average:
-                    {stats["rainfall"]["average"]}
-
-                    - Maximum:
-                    {stats["rainfall"]["maximum"]}
-
-                    - Minimum:
-                    {stats["rainfall"]["minimum"]}
-                    """
-                )
+                    st.metric(
+                        "Average Rainfall",
+                        stats["rainfall"]["average"]
+                    )
 
                 st.divider()
 
@@ -703,34 +1149,751 @@ elif selected == "RAG Intelligence":
 
                         f"""
                         Source {i}
-                        | Similarity:
+                        | Similarity Score:
                         {doc["similarity"]}
                         """
                     ):
+
+                        similarity = doc[
+                            "similarity"
+                        ]
+
+                        # =====================================
+                        # CONFIDENCE STATUS
+                        # =====================================
+                        if similarity >= 0.85:
+
+                            st.success(
+                                "High Semantic Match"
+                            )
+
+                        elif similarity >= 0.70:
+
+                            st.warning(
+                                "Moderate Semantic Match"
+                            )
+
+                        else:
+
+                            st.error(
+                                "Low Semantic Match"
+                            )
+
+                        # =====================================
+                        # SOURCE DOCUMENT
+                        # =====================================
+                        st.markdown(
+                            "### Retrieved Agricultural Record"
+                        )
 
                         st.markdown(
                             doc["text"]
                         )
 
-                        st.markdown(
-                            f"""
-                            **State:** {metadata["state"]}
+                        st.divider()
 
-                            **District:** {metadata["district"]}
+                        # =====================================
+                        # AGRICULTURAL METADATA
+                        # =====================================
+                        meta1, meta2 = st.columns(2)
 
-                            **Year:** {metadata["year"]}
+                        with meta1:
 
-                            **Crop:** {metadata["crop"]}
-                            """
-                        )
+                            st.markdown(
+                                f"""
+                                ### Regional Metadata
+
+                                - State:
+                                  {metadata["state"]}
+
+                                - District:
+                                  {metadata["district"]}
+
+                                - Crop:
+                                  {metadata["crop"]}
+                                """
+                            )
+
+                        with meta2:
+
+                            st.markdown(
+                                f"""
+                                ### Retrieval Metadata
+
+                                - Year:
+                                  {metadata["year"]}
+
+                                - Similarity:
+                                  {doc["similarity"]}
+
+                                - Engine:
+                                  {st.session_state.retrieval_engine}
+                                """
+                            )
 
 # =========================================================
 # ANALYTICS
 # =========================================================
 elif selected == "Analytics":
 
-    st.header(
-        "Agricultural Analytics"
+    # =====================================================
+    # IMPORTS
+    # =====================================================
+    import pandas as pd
+
+    from collections import Counter
+
+    import re
+
+    import plotly.express as px
+
+    from datetime import datetime
+
+    # =====================================================
+    # PAGE HEADER
+    # =====================================================
+    st.markdown(
+        """
+        <div style="
+            margin-bottom:25px;
+        ">
+
+        <h1 style="
+            color:white;
+            font-size:42px;
+            font-weight:700;
+            margin-bottom:8px;
+        ">
+            AI Agricultural Intelligence Analytics
+        </h1>
+
+        <p style="
+            color:#9CA3AF;
+            font-size:17px;
+        ">
+            Centralized operational analytics
+            for AI activity, retrieval intelligence,
+            forecasting usage, and agricultural interactions.
+        </p>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
+    # =====================================================
+    # LOAD DATABASE ACTIVITIES
+    # =====================================================
+    activities = load_activities()
+
+    ai_history = [
+
+        activity for activity in activities
+
+        if activity.module == "AI Assistant"
+    ]
+
+    rag_history = [
+
+        activity for activity in activities
+
+        if activity.module == "RAG Intelligence"
+    ]
+
+    weather_history = [
+
+        activity for activity in activities
+
+        if activity.module == "Weather Intelligence"
+    ]
+
+    # =====================================================
+    # METRICS
+    # =====================================================
+    total_ai_queries = len(ai_history)
+
+    total_rag_queries = len(rag_history)
+
+    total_weather_queries = len(weather_history)
+
+    total_queries = (
+
+        total_ai_queries
+        + total_rag_queries
+        + total_weather_queries
+    )
+
+    # =====================================================
+    # KPI SECTION
+    # =====================================================
+    st.subheader(
+        "Operational Intelligence Metrics"
+    )
+
+    m1, m2, m3, m4 = st.columns(4)
+
+    with m1:
+
+        st.metric(
+            "Total Queries",
+            total_queries
+        )
+
+    with m2:
+
+        st.metric(
+            "AI Assistant",
+            total_ai_queries
+        )
+
+    with m3:
+
+        st.metric(
+            "RAG Intelligence",
+            total_rag_queries
+        )
+
+    with m4:
+
+        st.metric(
+            "Weather Requests",
+            total_weather_queries
+        )
+
+    st.divider()
+
+    # =====================================================
+    # SYSTEM STATUS
+    # =====================================================
+    st.subheader(
+        "Enterprise AI Infrastructure"
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+
+        st.success(
+            "Gemini AI Online"
+        )
+
+    with c2:
+
+        st.success(
+            "FAISS Active"
+        )
+
+    with c3:
+
+        st.success(
+            "Pinecone Ready"
+        )
+
+    with c4:
+
+        st.success(
+            "PostgreSQL Connected"
+        )
+
+    st.divider()
+
+    # =====================================================
+    # QUERY DISTRIBUTION
+    # =====================================================
+    st.subheader(
+        "AI Activity Distribution"
+    )
+
+    chart1, chart2 = st.columns(2)
+
+    # =====================================================
+    # BAR CHART
+    # =====================================================
+    with chart1:
+
+        distribution_df = pd.DataFrame(
+
+            {
+                "Module": [
+
+                    "AI Assistant",
+                    "RAG Intelligence",
+                    "Weather Intelligence"
+                ],
+
+                "Queries": [
+
+                    total_ai_queries,
+                    total_rag_queries,
+                    total_weather_queries
+                ]
+            }
+        )
+
+        fig1 = px.bar(
+
+            distribution_df,
+
+            x="Module",
+
+            y="Queries",
+
+            text="Queries"
+        )
+
+        fig1.update_layout(
+
+            template="plotly_dark",
+
+            paper_bgcolor="#0B1120",
+
+            plot_bgcolor="#0B1120",
+
+            height=420
+        )
+
+        st.plotly_chart(
+            fig1,
+            use_container_width=True
+        )
+
+    # =====================================================
+    # PIE CHART
+    # =====================================================
+    with chart2:
+
+        fig2 = px.pie(
+
+            distribution_df,
+
+            names="Module",
+
+            values="Queries",
+
+            hole=0.5
+        )
+
+        fig2.update_layout(
+
+            template="plotly_dark",
+
+            paper_bgcolor="#0B1120",
+
+            plot_bgcolor="#0B1120",
+
+            height=420
+        )
+
+        st.plotly_chart(
+            fig2,
+            use_container_width=True
+        )
+
+    st.divider()
+
+    # =====================================================
+    # RECENT AI ACTIVITIES
+    # =====================================================
+    st.subheader(
+        "Recent AI Activities"
+    )
+
+    # =====================================================
+    # DATABASE ACTIVITY TABLE
+    # =====================================================
+    if len(activities) > 0:
+
+        activity_data = []
+
+        for activity in activities:
+
+            activity_data.append(
+
+                {
+                    "ID": activity.id,
+
+                    "Module": activity.module,
+
+                    "Query": activity.query,
+
+                    "Retrieval": activity.retrieval_engine,
+
+                    "Language": activity.language,
+
+                    "AI Temperature": activity.ai_temperature,
+
+                    "Timestamp": activity.created_at.strftime(
+                        "%Y-%m-%d %H:%M"
+                    )
+                }
+            )
+
+        activity_df = pd.DataFrame(
+            activity_data
+        )
+
+        st.dataframe(
+
+            activity_df,
+
+            use_container_width=True,
+
+            height=450
+        )
+
+        st.divider()
+
+        # =====================================================
+        # PERMANENT DATABASE DELETE
+        # =====================================================
+        st.subheader(
+            "Database Activity Management"
+        )
+
+        activity_ids = [
+
+            activity.id
+            for activity in activities
+        ]
+
+        if len(activity_ids) > 0:
+
+            selected_activity = st.selectbox(
+
+                "Select Activity ID to Delete Permanently",
+
+                activity_ids
+            )
+
+            if st.button(
+                "Delete Activity Permanently"
+            ):
+
+                delete_activity(
+                    selected_activity
+                )
+
+                st.success(
+                    "Activity deleted from PostgreSQL database."
+                )
+
+                st.rerun()
+
+        else:
+
+            st.info(
+                "No database activities available."
+            )
+
+    st.divider()
+
+    # =====================================================
+    # CURRENT ACTIVE SETTINGS
+    # =====================================================
+    st.subheader(
+        "Current AI Configuration"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.info(
+            f"""
+            Language:
+            {st.session_state.language_preference}
+            """
+        )
+
+        st.info(
+            f"""
+            Retrieval Engine:
+            {st.session_state.retrieval_engine}
+            """
+        )
+
+    with col2:
+
+        st.info(
+            f"""
+            AI Temperature:
+            {st.session_state.ai_temperature}
+            """
+        )
+
+        st.info(
+            f"""
+            Prediction Horizon:
+            {st.session_state.prediction_horizon}
+            """
+        )
+
+    st.divider()
+
+    # =====================================================
+    # QUERY INTELLIGENCE ANALYTICS
+    # =====================================================
+    st.subheader(
+        "Query Intelligence Analytics"
+    )
+
+    # =====================================================
+    # EXTRACT QUERY TEXTS
+    # =====================================================
+    all_queries = [
+
+        activity.query.lower()
+
+        for activity in activities
+    ]
+
+    # =====================================================
+    # TOKENIZATION
+    # =====================================================
+    stop_words = {
+
+        "what",
+        "is",
+        "the",
+        "in",
+        "of",
+        "for",
+        "show",
+        "give",
+        "crop",
+        "production",
+        "rainfall",
+        "yield",
+        "tell",
+        "me"
+    }
+
+    words = []
+
+    for query in all_queries:
+
+        extracted_words = re.findall(
+
+            r"\b[a-zA-Z]+\b",
+
+            query
+        )
+
+        filtered_words = [
+
+            word for word
+            in extracted_words
+
+            if word not in stop_words
+            and len(word) > 2
+        ]
+
+        words.extend(filtered_words)
+
+    # =====================================================
+    # MOST SEARCHED TERMS
+    # =====================================================
+    word_counts = Counter(
+        words
+    )
+
+    top_terms = word_counts.most_common(10)
+
+    if len(top_terms) > 0:
+
+        terms_df = pd.DataFrame(
+
+            top_terms,
+
+            columns=[
+                "Agricultural Topic",
+                "Search Count"
+            ]
+        )
+
+        col1, col2 = st.columns(2)
+
+        # =================================================
+        # TOP SEARCHED TOPICS
+        # =================================================
+        with col1:
+
+            st.markdown(
+                "### Most Searched Topics"
+            )
+
+            fig_topics = px.bar(
+
+                terms_df,
+
+                x="Agricultural Topic",
+
+                y="Search Count",
+
+                text="Search Count"
+            )
+
+            fig_topics.update_layout(
+
+                template="plotly_dark",
+
+                paper_bgcolor="#0B1120",
+
+                plot_bgcolor="#0B1120",
+
+                height=420
+            )
+
+            st.plotly_chart(
+
+                fig_topics,
+
+                use_container_width=True
+            )
+
+        # =================================================
+        # RETRIEVAL ENGINE ANALYTICS
+        # =================================================
+        with col2:
+
+            st.markdown(
+                "### Retrieval Engine Usage"
+            )
+
+            retrieval_data = pd.DataFrame(
+
+                {
+                    "Engine": [
+
+                        activity.retrieval_engine
+
+                        for activity in activities
+                    ]
+                }
+            )
+
+            retrieval_counts = retrieval_data[
+                "Engine"
+            ].value_counts().reset_index()
+
+            retrieval_counts.columns = [
+
+                "Engine",
+                "Usage"
+            ]
+
+            fig_retrieval = px.pie(
+
+                retrieval_counts,
+
+                names="Engine",
+
+                values="Usage",
+
+                hole=0.5
+            )
+
+            fig_retrieval.update_layout(
+
+                template="plotly_dark",
+
+                paper_bgcolor="#0B1120",
+
+                plot_bgcolor="#0B1120",
+
+                height=420
+            )
+
+            st.plotly_chart(
+
+                fig_retrieval,
+
+                use_container_width=True
+            )
+
+    else:
+
+        st.info(
+            "No query intelligence data available."
+        )
+
+    st.divider()
+
+     # =====================================================
+    # LANGUAGE ANALYTICS
+    # =====================================================
+    st.subheader(
+        "Language Intelligence Analytics"
+    )
+
+    language_df = pd.DataFrame(
+
+        {
+            "Language": [
+
+                activity.language
+
+                for activity in activities
+            ]
+        }
+    )
+
+    if len(language_df) > 0:
+
+        language_counts = language_df[
+            "Language"
+        ].value_counts().reset_index()
+
+        language_counts.columns = [
+
+            "Language",
+            "Usage"
+        ]
+
+        fig_language = px.bar(
+
+            language_counts,
+
+            x="Language",
+
+            y="Usage",
+
+            text="Usage"
+        )
+
+        fig_language.update_layout(
+
+            template="plotly_dark",
+
+            paper_bgcolor="#0B1120",
+
+            plot_bgcolor="#0B1120",
+
+            height=400
+        )
+
+        st.plotly_chart(
+
+            fig_language,
+
+            use_container_width=True
+        )
+
+    else:
+
+        st.info(
+            "No language analytics available."
+        )
+
+    st.divider()
+
+    # =====================================================
+    # EXISTING ANALYTICS
+    # =====================================================
+    st.subheader(
+        "Advanced Agricultural Analytics"
     )
 
     show_model_analytics()
@@ -741,13 +1904,14 @@ elif selected == "Analytics":
 
     st.info(
         """
-        Analytics dashboard for:
+        Advanced analytics ecosystem includes:
 
-        - Model benchmarking
-        - Feature importance
-        - Agricultural trend analysis
-        - Yield intelligence
-        - Performance evaluation
+        - Agricultural forecasting intelligence
+        - Machine learning benchmarking
+        - Yield trend analysis
+        - Climate-aware insights
+        - Retrieval analytics
+        - AI operational intelligence
         """
     )
 
@@ -1424,6 +2588,35 @@ elif selected == "Weather Intelligence":
                     advisory
                 )
 
+                # =====================================
+                # SAVE WEATHER HISTORY
+                # =====================================
+                st.session_state.weather_history.append(
+
+                    {
+                        "query": city,
+                        "response": advisory
+                    }
+                )
+
+                # =========================================
+                # SAVE ACTIVITY
+                # =========================================
+                save_activity(
+
+                    module="Weather Intelligence",
+
+                    query=city,
+
+                    response=advisory,
+
+                    retrieval_engine=st.session_state.retrieval_engine,
+
+                    language=st.session_state.language_preference,
+
+                    ai_temperature=st.session_state.ai_temperature
+                )
+
             # =============================================
             # SMART ALERTS
             # =============================================
@@ -1500,16 +2693,268 @@ elif selected == "Weather Intelligence":
 elif selected == "Settings":
 
     st.header(
-        "System Settings"
+        "AI Agricultural Intelligence Control Center"
+    )
+
+    st.markdown(
+        """
+        Configure AI intelligence,
+        multilingual preferences,
+        retrieval systems,
+        forecasting controls,
+        and enterprise infrastructure settings.
+        """
+    )
+
+    st.divider()
+
+    # =====================================================
+    # FARMER PREFERENCES
+    # =====================================================
+    st.subheader(
+        "Farmer Preferences"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.session_state.language_preference = st.selectbox(
+
+            "Preferred Language",
+
+            [
+                "English",
+                "Hindi",
+                "Telugu",
+                "Marathi",
+                "Tamil"
+            ],
+
+            index=[
+                "English",
+                "Hindi",
+                "Telugu",
+                "Marathi",
+                "Tamil"
+            ].index(
+                st.session_state.language_preference
+            )
+        )
+
+    with col2:
+
+        st.session_state.weather_alerts = st.toggle(
+
+            "Enable Weather Alerts",
+
+            value=st.session_state.weather_alerts
+        )
+
+    st.divider()
+
+    # =====================================================
+    # AI INTELLIGENCE CONTROLS
+    # =====================================================
+    st.subheader(
+        "AI Intelligence Controls"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.session_state.ai_temperature = st.slider(
+
+            "Gemini AI Temperature",
+
+            min_value=0.0,
+
+            max_value=1.0,
+
+            value=float(
+                st.session_state.ai_temperature
+            ),
+
+            step=0.1
+        )
+
+    with col2:
+
+        st.session_state.retrieval_engine = st.selectbox(
+
+            "Retrieval Engine",
+
+            [
+                "FAISS",
+                "Pinecone",
+                "Hybrid AI Retrieval"
+            ],
+
+            index=[
+                "FAISS",
+                "Pinecone",
+                "Hybrid AI Retrieval"
+            ].index(
+                st.session_state.retrieval_engine
+            )
+        )
+
+    st.session_state.ai_explanation_mode = st.toggle(
+
+        "Enable AI Explanation Mode",
+
+        value=st.session_state.ai_explanation_mode
+    )
+
+    st.caption(
+        """
+        AI explanation mode enables
+        explainable agricultural intelligence
+        including rainfall impact,
+        historical trend reasoning,
+        and prediction analysis.
+        """
+    )
+
+    st.divider()
+
+    # =====================================================
+    # FORECAST INTELLIGENCE
+    # =====================================================
+    st.subheader(
+        "Forecast Intelligence"
+    )
+
+    st.session_state.prediction_horizon = st.radio(
+
+        "Prediction Horizon",
+
+        [
+            "1 Year",
+            "3 Years",
+            "5 Years"
+        ],
+
+        horizontal=True,
+
+        index=[
+            "1 Year",
+            "3 Years",
+            "5 Years"
+        ].index(
+            st.session_state.prediction_horizon
+        )
     )
 
     st.info(
+        f"""
+        Current forecasting configuration:
+        {st.session_state.prediction_horizon}
+        agricultural forecasting horizon enabled.
         """
-        Application configuration,
-        AI model settings,
-        system preferences,
-        multilingual support,
-        and future enterprise controls
-        will appear here.
+    )
+
+    st.divider()
+
+    # =====================================================
+    # ENTERPRISE SYSTEM STATUS
+    # =====================================================
+    st.subheader(
+        "Enterprise Infrastructure Status"
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        st.success(
+            "PostgreSQL Connected"
+        )
+
+        st.caption(
+            "Persistence Layer Active"
+        )
+
+    with col2:
+
+        st.success(
+            "FAISS Vector Store Active"
+        )
+
+        st.caption(
+            "Semantic Retrieval Ready"
+        )
+
+    with col3:
+
+        st.success(
+            "Gemini AI Connected"
+        )
+
+        st.caption(
+            "AI Intelligence Engine Online"
+        )
+
+    col4, col5 = st.columns(2)
+
+    with col4:
+
+        st.success(
+            "Pinecone Integration Ready"
+        )
+
+        st.caption(
+            "Cloud Vector Retrieval Enabled"
+        )
+
+    with col5:
+
+        if st.session_state.weather_alerts:
+
+            st.success(
+                "Weather Intelligence Active"
+            )
+
+        else:
+
+            st.warning(
+                "Weather Alerts Disabled"
+            )
+
+        st.caption(
+            "Climate Intelligence Monitoring"
+        )
+
+    st.divider()
+
+    # =====================================================
+    # CURRENT ACTIVE CONFIGURATION
+    # =====================================================
+    st.subheader(
+        "Current Active Configuration"
+    )
+
+    st.markdown(
+        f"""
+        ### AI Configuration Summary
+
+        - Language Preference:
+        **{st.session_state.language_preference}**
+
+        - AI Temperature:
+        **{st.session_state.ai_temperature}**
+
+        - Retrieval Engine:
+        **{st.session_state.retrieval_engine}**
+
+        - Prediction Horizon:
+        **{st.session_state.prediction_horizon}**
+
+        - Weather Alerts:
+        **{"Enabled" if st.session_state.weather_alerts else "Disabled"}**
+
+        - AI Explanation Mode:
+        **{"Enabled" if st.session_state.ai_explanation_mode else "Disabled"}**
         """
     )

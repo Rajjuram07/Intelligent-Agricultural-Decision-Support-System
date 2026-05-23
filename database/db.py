@@ -1,3 +1,5 @@
+from database.models import Base
+
 from sqlalchemy import create_engine
 
 from utils.config import (
@@ -17,4 +19,11 @@ DATABASE_URL = (
 
 engine = create_engine(
     DATABASE_URL
+)
+
+# =========================================================
+# CREATE DATABASE TABLES
+# =========================================================
+Base.metadata.create_all(
+    bind=engine
 )

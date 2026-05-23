@@ -2,6 +2,8 @@
 # RAG ENGINE
 # =========================================================
 
+import streamlit as st
+
 import google.generativeai as genai
 
 from rag_workspace.data_loader import (
@@ -254,6 +256,63 @@ def generate_rag_response(
     )
 
     # =====================================================
+    # EXPLAINABLE AI INSIGHTS
+    # =====================================================
+    explanation = {
+
+        "retrieval_engine": st.session_state.get(
+            "retrieval_engine",
+            "FAISS"
+        ),
+
+        "documents_retrieved": len(
+            retrieved_docs
+        ),
+
+        "average_similarity": round(
+
+            sum(
+                doc["similarity"]
+                for doc in retrieved_docs
+            ) / len(retrieved_docs),
+
+            3
+        ) if retrieved_docs else 0,
+
+        "rainfall_analysis": (
+
+            "Rainfall patterns indicate "
+            "potential agricultural impact."
+
+            if statistics.get(
+                "rainfall",
+                {}
+            ).get(
+                "average",
+                0
+            ) > 0
+
+            else "No rainfall intelligence detected."
+        ),
+
+        "production_trend": (
+
+            "Production statistics show "
+            "historical agricultural variation."
+
+            if statistics.get(
+                "production",
+                {}
+            ).get(
+                "average",
+                0
+            ) > 0
+
+            else "No production trend available."
+        )
+    }
+
+    # =====================================================
     # FINAL RESPONSE
     # =====================================================
     return {
@@ -262,5 +321,7 @@ def generate_rag_response(
 
         "retrieved_docs": retrieved_docs,
 
-        "statistics": statistics
+        "statistics": statistics,
+
+        "explanation": explanation
     }

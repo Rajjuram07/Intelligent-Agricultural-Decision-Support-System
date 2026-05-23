@@ -97,3 +97,14 @@ os.makedirs(
     CACHE_DIR,
     exist_ok=True
 )
+
+# =========================================================
+# PINECONE CONFIGURATION
+# =========================================================
+PINECONE_API_KEY = os.getenv(
+    "PINECONE_API_KEY"
+)
+
+PINECONE_INDEX_NAME = os.getenv(
+    "PINECONE_INDEX_NAME"
+)

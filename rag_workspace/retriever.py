@@ -4,12 +4,19 @@
 
 import numpy as np
 
+import streamlit as st
+
 from rag_workspace.embeddings import (
     model
 )
 
 from rag_workspace.vector_store import (
-    search_documents
+
+    search_documents,
+
+    initialize_pinecone,
+
+    pinecone_search
 )
 
 
@@ -34,48 +41,195 @@ def retrieve_documents(
         [query]
     )[0]
 
-    # =====================================================
-    # SEARCH DOCUMENTS
-    # =====================================================
-    distances, indices = search_documents(
-
-        index,
-
-        query_embedding,
-
-        top_k
-    )
-
     retrieved_docs = []
 
+    retrieval_engine = st.session_state.get(
+
+        "retrieval_engine",
+
+        "FAISS"
+    )
+
     # =====================================================
-    # PROCESS RESULTS
+    # FAISS RETRIEVAL
     # =====================================================
-    for distance, idx in zip(
-        distances,
-        indices
-    ):
+    if retrieval_engine == "FAISS":
 
-        if idx >= len(documents):
+        distances, indices = search_documents(
 
-            continue
+            index,
 
-        doc = documents[idx]
+            query_embedding,
 
-        similarity = 1 / (
-            1 + float(distance)
+            top_k
         )
 
-        retrieved_docs.append({
+        for distance, idx in zip(
+            distances,
+            indices
+        ):
 
-            "text": doc["text"],
+            if idx >= len(documents):
 
-            "metadata": doc["metadata"],
+                continue
 
-            "similarity": round(
-                similarity,
-                3
+            doc = documents[idx]
+
+            similarity = 1 / (
+                1 + float(distance)
             )
-        })
 
-    return retrieved_docs
+            retrieved_docs.append({
+
+                "text": doc["text"],
+
+                "metadata": doc["metadata"],
+
+                "similarity": round(
+                    similarity,
+                    3
+                )
+            })
+
+    # =====================================================
+    # PINECONE RETRIEVAL
+    # =====================================================
+    elif retrieval_engine == "Pinecone":
+
+        pinecone_index = initialize_pinecone()
+
+        if pinecone_index:
+
+            matches = pinecone_search(
+
+                pinecone_index,
+
+                query_embedding,
+
+                top_k
+            )
+
+            for match in matches:
+
+                retrieved_docs.append({
+
+                    "text": match.metadata.get(
+                        "text",
+                        ""
+                    ),
+
+                    "metadata": match.metadata,
+
+                    "similarity": round(
+                        match.score,
+                        3
+                    )
+                })
+
+    # =====================================================
+    # HYBRID RETRIEVAL
+    # =====================================================
+    elif retrieval_engine == "Hybrid AI Retrieval":
+
+        # ================================================
+        # FAISS RESULTS
+        # ================================================
+        distances, indices = search_documents(
+
+            index,
+
+            query_embedding,
+
+            top_k
+        )
+
+        for distance, idx in zip(
+            distances,
+            indices
+        ):
+
+            if idx >= len(documents):
+
+                continue
+
+            doc = documents[idx]
+
+            similarity = 1 / (
+                1 + float(distance)
+            )
+
+            retrieved_docs.append({
+
+                "text": doc["text"],
+
+                "metadata": doc["metadata"],
+
+                "similarity": round(
+                    similarity,
+                    3
+                )
+            })
+
+        # ================================================
+        # PINECONE RESULTS
+        # ================================================
+        pinecone_index = initialize_pinecone()
+
+        if pinecone_index:
+
+            matches = pinecone_search(
+
+                pinecone_index,
+
+                query_embedding,
+
+                top_k
+            )
+
+            for match in matches:
+
+                retrieved_docs.append({
+
+                    "text": match.metadata.get(
+                        "text",
+                        ""
+                    ),
+
+                    "metadata": match.metadata,
+
+                    "similarity": round(
+                        match.score,
+                        3
+                    )
+                })
+
+        # ================================================
+        # REMOVE DUPLICATES
+        # ================================================
+        unique_docs = []
+
+        seen_texts = set()
+
+        for doc in retrieved_docs:
+
+            if doc["text"] not in seen_texts:
+
+                unique_docs.append(doc)
+
+                seen_texts.add(
+                    doc["text"]
+                )
+
+        # ================================================
+        # SORT BY SIMILARITY
+        # ================================================
+        retrieved_docs = sorted(
+
+            unique_docs,
+
+            key=lambda x: x["similarity"],
+
+            reverse=True
+        )
+
+    return retrieved_docs[:top_k]
